@@ -1,4 +1,5 @@
 import os
+import threading
 import requests
 from flask import Flask, request, jsonify
 from dotenv import load_dotenv
@@ -54,24 +55,34 @@ def build_summary(data: dict) -> str:
     )
 
 
+def send_weather_async(city: str, response_url: str) -> None:
+    """Fetch weather and post result back to Slack via response_url."""
+    try:
+        data = fetch_weather(city)
+        text = build_summary(data)
+        payload = {"response_type": "in_channel", "text": text}
+    except requests.exceptions.HTTPError as e:
+        if e.response.status_code == 404:
+            payload = {"response_type": "ephemeral", "text": f"❌ City *{city}* not found. Try `/weather London`."}
+        else:
+            payload = {"response_type": "ephemeral", "text": "❌ Weather service error. Please try again."}
+    except Exception:
+        payload = {"response_type": "ephemeral", "text": "❌ Unexpected error. Please try again."}
+
+    requests.post(response_url, json=payload, timeout=5)
+
+
 @app.route("/weather", methods=["POST"])
 def weather_command():
     text = request.form.get("text", "").strip()
     city = text if text else DEFAULT_CITY
+    response_url = request.form.get("response_url")
 
-    try:
-        data = fetch_weather(city)
-        summary = build_summary(data)
-        return jsonify({"response_type": "in_channel", "text": summary})
-    except requests.exceptions.HTTPError as e:
-        if e.response.status_code == 404:
-            return jsonify({
-                "response_type": "ephemeral",
-                "text": f"❌ City *{city}* not found. Try `/weather London`."
-            })
-        return jsonify({"response_type": "ephemeral", "text": "❌ Weather service error. Please try again."})
-    except Exception:
-        return jsonify({"response_type": "ephemeral", "text": "❌ Unexpected error. Please try again."})
+    # Acknowledge Slack immediately to avoid 3-second timeout
+    thread = threading.Thread(target=send_weather_async, args=(city, response_url))
+    thread.start()
+
+    return jsonify({"response_type": "ephemeral", "text": f"⏳ Fetching weather for *{city}*..."})
 
 
 @app.route("/health", methods=["GET"])
