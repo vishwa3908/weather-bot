@@ -79,9 +79,11 @@ def fetch_aqi(lat: float, lon: float) -> str:
     url = "http://api.openweathermap.org/data/2.5/air_pollution"
     resp = requests.get(url, params={"lat": lat, "lon": lon, "appid": WEATHER_API_KEY}, timeout=5)
     resp.raise_for_status()
-    aqi_index = resp.json()["list"][0]["main"]["aqi"]
+    result = resp.json()["list"][0]
+    aqi_index = result["main"]["aqi"]
+    pm25 = result["components"]["pm2_5"]
     label = AQI_LABELS.get(aqi_index, "Unknown")
-    return f"{label} (AQI: {aqi_index})"
+    return f"{label} (PM2.5: {pm25} µg/m³)"
 
 
 def fetch_forecast(city: str) -> list[dict]:
