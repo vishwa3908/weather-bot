@@ -7,5 +7,7 @@ services:
     envVars:
       - key: OPENWEATHER_API_KEY
         sync: false
+      - key: SLACK_BOT_TOKEN
+        sync: false
       - key: DEFAULT_CITY
         value: Delhi
